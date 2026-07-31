@@ -5,11 +5,9 @@ import (
 	"fmt"
 	"io"
 	"iter"
-	"log/slog"
 	"os"
 	"time"
 
-	"codeberg.org/clambin/go-common/charmer"
 	"github.com/gosimple/slug"
 	"github.com/grafana/grafana-openapi-client-go/models"
 	"github.com/grafana/grafana-operator/v5/api/v1beta1"
@@ -29,7 +27,7 @@ var (
 			if err != nil {
 				return fmt.Errorf("grafana: %w", err)
 			}
-			return exportDatasources(os.Stdout, client, cfg, args, charmer.GetLogger(cmd))
+			return exportDatasources(os.Stdout, client, cfg, args)
 		},
 	}
 )
@@ -43,17 +41,15 @@ func exportDatasources(
 	client *grafanaClient,
 	cfg configuration,
 	args []string,
-	logger *slog.Logger,
 ) error {
 
-	for datasource := range grafanaDataSources(client, args, logger) {
+	for datasource := range grafanaDataSources(client, args) {
 		if len(datasource.SecureJSONFields) > 0 {
-			logger.Warn("datasource uses secure JSON fields and requires manual changes. See https://grafana.github.io/grafana-operator/docs/datasources/", "datasource", datasource.Name)
+			_, _ = fmt.Fprintf(os.Stderr, "datasource %q uses secure JSON fields and requires manual changes. See https://grafana.github.io/grafana-operator/docs/datasources/\n", datasource.Name)
 		}
 		body, err := yaml.Marshal(operatorDatasource(cfg, datasource))
 		if err != nil {
-			logger.Error("failed to marshal operator datasource", "err", err)
-			return err
+			return fmt.Errorf("failed to marshal operator datasource: %w", err)
 		}
 		_, _ = w.Write([]byte("---\n"))
 		_, _ = w.Write(body)
@@ -63,15 +59,15 @@ func exportDatasources(
 }
 
 // grafanaDataSources returns all datasources that match the names in args.
-func grafanaDataSources(c *grafanaClient, args []string, logger *slog.Logger) iter.Seq[*models.DataSource] {
-	return func(yield func(*models.DataSource) bool) {
+func grafanaDataSources(c *grafanaClient, args []string) iter.Seq2[*models.DataSource, error] {
+	return func(yield func(*models.DataSource, error) bool) {
 		for _, name := range args {
 			ds, err := c.Datasources.GetDataSourceByName(name)
 			if err != nil {
-				logger.Error("Error getting datasources", "name", name, "err", err)
+				yield(nil, fmt.Errorf("error getting datasource %q: %w", name, err))
 				continue
 			}
-			if !yield(ds.GetPayload()) {
+			if !yield(ds.GetPayload(), nil) {
 				return
 			}
 		}

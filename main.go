@@ -15,15 +15,12 @@ var (
 	rootCmd        = cobra.Command{
 		Use:   "grafop",
 		Short: "exports Grafana dashboards & datasources as grafana-operator custom resources",
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			charmer.SetTextLogger(cmd, viper.GetBool("debug"))
-		},
 	}
 )
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
-		charmer.GetLogger(&rootCmd).Error("failed to run", "err", err)
+		_, _ = fmt.Fprintf(os.Stderr, "failed to run: %v\n", err)
 		os.Exit(1)
 	}
 }

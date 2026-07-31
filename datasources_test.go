@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"errors"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
@@ -17,8 +16,6 @@ import (
 )
 
 func TestExportDataSources(t *testing.T) {
-	logger := slog.New(slog.DiscardHandler)
-	//logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	v := viper.New()
 	v.Set("namespace", "monitoring")
 	v.Set("grafana.operator.label.value", "local-grafana")
@@ -35,7 +32,7 @@ func TestExportDataSources(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	require.NoError(t, exportDatasources(&buf, &client, cfg, []string{"prometheus"}, logger))
+	require.NoError(t, exportDatasources(&buf, &client, cfg, []string{"prometheus"}))
 
 	gp := filepath.Join("testdata", slug.Make(t.Name())+".yaml")
 	if *update {

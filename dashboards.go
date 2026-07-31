@@ -6,11 +6,9 @@ import (
 	"fmt"
 	"io"
 	"iter"
-	"log/slog"
 	"os"
 	"time"
 
-	"codeberg.org/clambin/go-common/charmer"
 	"codeberg.org/clambin/go-common/set"
 	"github.com/gosimple/slug"
 	"github.com/grafana/grafana-openapi-client-go/client/search"
@@ -32,7 +30,7 @@ var (
 			if err != nil {
 				return fmt.Errorf("grafana: %w", err)
 			}
-			return exportDashboards(os.Stdout, client, cfg, set.New(args...), charmer.GetLogger(cmd))
+			return exportDashboards(os.Stdout, client, cfg, set.New(args...))
 		},
 	}
 )
@@ -43,22 +41,28 @@ func init() {
 	_ = viper.BindPFlag("folders", dashboardsCmd.Flags().Lookup("folders"))
 }
 
+type exportedDashboard struct {
+	Hit       *models.Hit
+	Dashboard *models.DashboardFullWithMeta
+}
+
 func exportDashboards(
 	w io.Writer,
 	client *grafanaClient,
 	cfg configuration,
 	args set.Set[string],
-	logger *slog.Logger,
 ) error {
-	for entry, dashboard := range grafanaDashboards(client, cfg.Folders, args, logger) {
-		db, err := operatorDashboard(cfg, entry, dashboard)
+	for dashboard, err := range grafanaDashboards(client, cfg.Folders, args) {
+		if err != nil {
+			return err
+		}
+		db, err := operatorDashboard(cfg, dashboard.Hit, dashboard.Dashboard)
 		if err != nil {
 			return fmt.Errorf("operator dashboard: %w", err)
 		}
 		body, err := yaml.Marshal(db)
 		if err != nil {
-			logger.Error("failed to marshal operator dashboard", "err", err)
-			return err
+			return fmt.Errorf("failed to marshal operator dashboard: %w", err)
 		}
 		_, _ = w.Write([]byte("---\n"))
 		_, _ = w.Write(body)
@@ -69,15 +73,15 @@ func exportDashboards(
 // grafanaDashboards returns all Grafana dashboards that match args.
 // If folders is false, it returns all dashboards whose title matches an element of args.
 // Otherwise, it returns all dashboards in folders that matches an element of args.
-func grafanaDashboards(c *grafanaClient, folders bool, args set.Set[string], logger *slog.Logger) iter.Seq2[*models.Hit, *models.DashboardFullWithMeta] {
-	return func(yield func(*models.Hit, *models.DashboardFullWithMeta) bool) {
+func grafanaDashboards(c *grafanaClient, folders bool, args set.Set[string]) iter.Seq2[exportedDashboard, error] {
+	return func(yield func(exportedDashboard, error) bool) {
 		params := search.SearchParams{Type: constP("dash-db")}
 		var page int64
 		for page = 1; ; page++ {
 			params.Page = &page
 			ok, err := c.Search.Search(&params)
 			if err != nil {
-				logger.Error("Error getting dashboards", "err", err)
+				yield(exportedDashboard{}, fmt.Errorf("error getting dashboards: %w", err))
 				return
 			}
 			hits := ok.GetPayload()
@@ -93,10 +97,10 @@ func grafanaDashboards(c *grafanaClient, folders bool, args set.Set[string], log
 				}
 				db, err := c.Dashboards.GetDashboardByUID(entry.UID)
 				if err != nil {
-					logger.Error("Error getting dashboard", "err", err, "uid", entry.UID, "title", entry.Title)
+					yield(exportedDashboard{}, fmt.Errorf("error getting dashboard %q: %w", entry.Title, err))
 					return
 				}
-				if !yield(entry, db.GetPayload()) {
+				if !yield(exportedDashboard{Hit: entry, Dashboard: db.GetPayload()}, nil) {
 					return
 				}
 			}

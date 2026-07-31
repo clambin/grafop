@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"flag"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
@@ -105,8 +104,6 @@ func TestExportDashboards(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			logger := slog.New(slog.DiscardHandler)
-			//logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 			cfg := configurationFromViper(tt.config())
 			client := grafanaClient{
 				Search: fakeSearcher{
@@ -123,7 +120,7 @@ func TestExportDashboards(t *testing.T) {
 			}
 
 			var buf bytes.Buffer
-			require.NoError(t, exportDashboards(&buf, &client, cfg, set.New(tt.args...), logger))
+			require.NoError(t, exportDashboards(&buf, &client, cfg, set.New(tt.args...)))
 
 			gp := filepath.Join("testdata", slug.Make(t.Name())+".yaml")
 			if *update {
