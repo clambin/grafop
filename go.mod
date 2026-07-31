@@ -7,7 +7,7 @@ require (
 	codeberg.org/clambin/go-common/set v0.6.0
 	github.com/go-openapi/strfmt v0.27.0
 	github.com/gosimple/slug v1.15.0
-	github.com/grafana/grafana-openapi-client-go v0.0.0-20260608140303-399c66621c54
+	github.com/grafana/grafana-openapi-client-go v0.0.0-20260724161645-6029e6c64947
 	github.com/grafana/grafana-operator/v5 v5.24.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
