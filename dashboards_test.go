@@ -53,7 +53,7 @@ func TestExportDashboards(t *testing.T) {
 			config: func() *viper.Viper {
 				v := viper.New()
 				v.Set("grafana.url", "http://grafana")
-				v.Set("tags", "grope")
+				v.Set("tags", "grafop")
 				return v
 			},
 			wantErr: assert.NoError,
@@ -157,9 +157,9 @@ func Test_tagDashboard(t *testing.T) {
 			wantErr: assert.NoError,
 		},
 		{
-			name: "valid: grope tag already exists",
+			name: "valid: tag already exists",
 			db: models.DashboardFullWithMeta{Dashboard: map[string]any{
-				"tags": []any{"foo", "bar", "grope"},
+				"tags": []any{"foo", "bar", "grafop"},
 			}},
 			wantErr: assert.NoError,
 		},
@@ -183,11 +183,11 @@ func Test_tagDashboard(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tagDashboard(&tt.db, "grope")
+			err := tagDashboard(&tt.db, "grafop")
 			tt.wantErr(t, err)
 
 			if err == nil {
-				assert.Contains(t, tt.db.Dashboard.(map[string]any)["tags"], "grope")
+				assert.Contains(t, tt.db.Dashboard.(map[string]any)["tags"], "grafop")
 			}
 		})
 	}

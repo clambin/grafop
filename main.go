@@ -13,7 +13,7 @@ import (
 var (
 	configFilename string
 	rootCmd        = cobra.Command{
-		Use:   "grope",
+		Use:   "grafop",
 		Short: "exports Grafana dashboards & datasources as grafana-operator custom resources",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			charmer.SetTextLogger(cmd, viper.GetBool("debug"))
@@ -60,13 +60,13 @@ func initViper(v *viper.Viper) {
 	if configFilename != "" {
 		v.SetConfigFile(configFilename)
 	} else {
-		v.AddConfigPath("/etc/grope/")
-		v.AddConfigPath("$HOME/.grope")
+		v.AddConfigPath("/etc/grafop/")
+		v.AddConfigPath("$HOME/.grafop")
 		v.AddConfigPath(".")
 		v.SetConfigName("config")
 	}
 
-	v.SetEnvPrefix("GROPE")
+	v.SetEnvPrefix("GRAFOP")
 	v.AutomaticEnv()
 
 	if err := v.ReadInConfig(); err != nil {
