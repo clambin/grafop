@@ -1,4 +1,4 @@
-module github.com/clambin/grope
+module github.com/clambin/grafop
 
 go 1.26.3
 
