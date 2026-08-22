@@ -106,7 +106,3 @@ type grafanaDashboardClient interface {
 type grafanaDatasourcesClient interface {
 	GetDataSourceByName(name string, opts ...datasources.ClientOption) (*datasources.GetDataSourceByNameOK, error)
 }
-
-func constP[T any](v T) *T {
-	return &v
-}

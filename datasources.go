@@ -88,14 +88,10 @@ func operatorDatasource(cfg configuration, datasource *models.DataSource) dataso
 		jsonData, _ = json.Marshal(datasource.JSONData)
 	}
 	return datasourceManifest{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: v1beta1.SchemeGroupVersion.String(),
-			Kind:       "GrafanaDatasource",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      slug.Make(datasource.Name),
-			Namespace: cfg.Namespace,
-		},
+		APIVersion: v1beta1.SchemeGroupVersion.String(),
+		Kind:       "GrafanaDatasource",
+		Name:       slug.Make(datasource.Name),
+		Namespace:  cfg.Namespace,
 		Spec: v1beta1.GrafanaDatasourceSpec{
 			GrafanaCommonSpec: v1beta1.GrafanaCommonSpec{
 				ResyncPeriod:              metav1.Duration{Duration: 10 * time.Minute},
@@ -115,7 +111,7 @@ func operatorDatasource(cfg configuration, datasource *models.DataSource) dataso
 				BasicAuth:      &datasource.BasicAuth,
 				BasicAuthUser:  datasource.BasicAuthUser,
 				OrgID:          &datasource.OrgID,
-				Editable:       constP(false), // TODO: editable even if this is false.
+				Editable:       new(false), // TODO: editable even if this is false.
 				JSONData:       jsonData,
 				SecureJSONData: nil, // unavailable from the grafana API.
 			},

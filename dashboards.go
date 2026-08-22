@@ -75,7 +75,7 @@ func exportDashboards(
 // Otherwise, it returns all dashboards in folders that matches an element of args.
 func grafanaDashboards(c *grafanaClient, folders bool, args set.Set[string]) iter.Seq2[exportedDashboard, error] {
 	return func(yield func(exportedDashboard, error) bool) {
-		params := search.SearchParams{Type: constP("dash-db")}
+		params := search.SearchParams{Type: new("dash-db")}
 		var page int64
 		for page = 1; ; page++ {
 			params.Page = &page
@@ -129,14 +129,10 @@ func operatorDashboard(cfg configuration, entry *models.Hit, dashboard *models.D
 	}
 
 	return dashboardManifest{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: v1beta1.SchemeGroupVersion.String(),
-			Kind:       "GrafanaDashboard",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      slug.Make(entry.Title),
-			Namespace: cfg.Namespace,
-		},
+		APIVersion: v1beta1.SchemeGroupVersion.String(),
+		Kind:       "GrafanaDashboard",
+		Name:       slug.Make(entry.Title),
+		Namespace:  cfg.Namespace,
 		Spec: v1beta1.GrafanaDashboardSpec{
 			GrafanaCommonSpec: v1beta1.GrafanaCommonSpec{
 				ResyncPeriod:              metav1.Duration{Duration: 10 * time.Minute},

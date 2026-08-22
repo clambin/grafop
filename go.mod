@@ -1,6 +1,6 @@
 module github.com/clambin/grafop
 
-go 1.26.3
+go 1.27
 
 require (
 	codeberg.org/clambin/go-common/charmer v0.5.0
