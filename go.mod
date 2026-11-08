@@ -3,7 +3,7 @@ module github.com/clambin/grafop
 go 1.27
 
 require (
-	codeberg.org/clambin/go-common/charmer v0.5.0
+	codeberg.org/clambin/go-common/charmer v0.5.1
 	codeberg.org/clambin/go-common/set v0.6.0
 	github.com/go-openapi/strfmt v0.27.0
 	github.com/gosimple/slug v1.15.0
