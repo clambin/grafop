@@ -3,76 +3,51 @@ package main
 import (
 	"fmt"
 	"net/url"
-	"strings"
 
+	"github.com/alecthomas/kong"
 	"github.com/go-openapi/strfmt"
 	goapi "github.com/grafana/grafana-openapi-client-go/client"
 	"github.com/grafana/grafana-openapi-client-go/client/dashboards"
 	"github.com/grafana/grafana-openapi-client-go/client/datasources"
 	"github.com/grafana/grafana-openapi-client-go/client/search"
-	"github.com/spf13/viper"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type configuration struct {
-	Grafana   grafanaConfiguration
-	Namespace string
-	Tags      []string
-	Folders   bool
+type CLI struct {
+	Grafana     grafanaConfig   `embed:"" prefix:"grafana-"`
+	Config      kong.ConfigFlag `name:"config" help:"Path to configuration file" type:"path"`
+	Namespace   string          `name:"namespace" default:"" help:"Namespace for k8s config maps (default: no namespace added)"`
+	DataSources DataSourcesCmd  `cmd:"" name:"datasources" help:"export datasources"`
+	Dashboards  DashboardsCmd   `cmd:"" help:"export dashboards"`
 }
 
-type grafanaConfiguration struct {
-	URL      string
-	Token    string
-	Operator grafanaOperatorConfiguration
+type grafanaConfig struct {
+	URL      string          `name:"url"`
+	Token    string          `name:"token" default:"" help:"Grafana API token (must have admin rights)"`
+	Operator grafanaOperator `embed:"" prefix:"operator-"`
 }
 
-type grafanaOperatorConfiguration struct {
-	Labels map[string]string
+type grafanaOperator struct {
+	Label grafanaOperatorLabel `embed:"" prefix:"label-"`
+}
+type grafanaOperatorLabel struct {
+	Name  string `name:"name" default:"dashboards" help:"label name used to select the Grafana instance"`
+	Value string `name:"value" default:"grafana" help:"label value used to select the Grafana instance"`
 }
 
-func configurationFromViper(v *viper.Viper) configuration {
-	var labels map[string]string
-	if name := v.GetString("grafana.operator.label.name"); name != "" {
-		labels = map[string]string{
-			name: v.GetString("grafana.operator.label.value"),
-		}
-	} else {
-		labels = map[string]string{
-			"dashboards": "grafana",
-		}
-	}
-	var tags []string
-	if tagsArg := v.GetString("tags"); tagsArg != "" {
-		tags = strings.Split(tagsArg, ",")
-	}
-	return configuration{
-		Grafana: grafanaConfiguration{
-			URL:   v.GetString("grafana.url"),
-			Token: v.GetString("grafana.token"),
-			Operator: grafanaOperatorConfiguration{
-				Labels: labels,
-			},
-		},
-		Namespace: v.GetString("namespace"),
-		Tags:      tags,
-		Folders:   v.GetBool("folders"),
-	}
-}
-
-func (c configuration) grafanaClient() (*grafanaClient, error) {
-	target, err := url.Parse(c.Grafana.URL)
+func (c grafanaConfig) client() (*grafanaClient, error) {
+	target, err := url.Parse(c.URL)
 	if err != nil {
-		return nil, fmt.Errorf("invalid grafana.url %q: %w", c.Grafana.URL, err)
+		return nil, fmt.Errorf("invalid Grafana url %q: %w", c.URL, err)
 	}
 	if target.Scheme == "" {
-		return nil, fmt.Errorf("invalid grafana.url %q: invalid scheme %q", c.Grafana.URL, target.Scheme)
+		return nil, fmt.Errorf("invalid grafana.url %q: invalid scheme %q", c.URL, target.Scheme)
 	}
 	cfg := goapi.TransportConfig{
 		Host:     target.Host,
 		BasePath: "/api",
 		Schemes:  []string{target.Scheme},
-		APIKey:   c.Grafana.Token,
+		APIKey:   c.Token,
 	}
 	client := goapi.NewHTTPClientWithConfig(strfmt.Default, &cfg)
 	return &grafanaClient{
@@ -82,11 +57,11 @@ func (c configuration) grafanaClient() (*grafanaClient, error) {
 	}, nil
 }
 
-func (c configuration) instanceSelector() *metav1.LabelSelector {
-	if c.Grafana.Operator.Labels == nil {
+func (c grafanaConfig) instanceSelector() *metav1.LabelSelector {
+	if c.Operator.Label.Name == "" {
 		return nil
 	}
-	return &metav1.LabelSelector{MatchLabels: c.Grafana.Operator.Labels}
+	return &metav1.LabelSelector{MatchLabels: map[string]string{c.Operator.Label.Name: c.Operator.Label.Value}}
 }
 
 type grafanaClient struct {
