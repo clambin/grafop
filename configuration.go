@@ -57,11 +57,11 @@ func (c grafanaConfig) client() (*grafanaClient, error) {
 	}, nil
 }
 
-func (c grafanaConfig) instanceSelector() *metav1.LabelSelector {
+func (c grafanaConfig) instanceSelector() (*metav1.LabelSelector, error) {
 	if c.Operator.Label.Name == "" {
-		return nil
+		return nil, fmt.Errorf("grafana.operator.label cannot be nil")
 	}
-	return &metav1.LabelSelector{MatchLabels: map[string]string{c.Operator.Label.Name: c.Operator.Label.Value}}
+	return &metav1.LabelSelector{MatchLabels: map[string]string{c.Operator.Label.Name: c.Operator.Label.Value}}, nil
 }
 
 type grafanaClient struct {

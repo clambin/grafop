@@ -19,11 +19,12 @@ func TestExportDataSources(t *testing.T) {
 		Datasources: fakeDataSourceFetcher{
 			dataSources: map[string]*models.DataSource{
 				"prometheus": {
-					ID:       0,
-					Name:     "prometheus",
-					Type:     "prometheus",
-					URL:      "http://prometheus",
-					JSONData: map[string]any{"foo": "bar"},
+					ID:               0,
+					Name:             "prometheus",
+					Type:             "prometheus",
+					URL:              "http://prometheus",
+					JSONData:         map[string]any{"foo": "bar"},
+					SecureJSONFields: map[string]bool{"secure": true},
 				},
 			},
 		},

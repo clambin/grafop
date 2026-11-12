@@ -34,9 +34,13 @@ func (d DataSourcesCmd) export(w io.Writer, client *grafanaClient, cli *CLI) err
 			return fmt.Errorf("failed to get datasources: %w", err)
 		}
 		if len(datasource.SecureJSONFields) > 0 {
-			_, _ = fmt.Fprintf(os.Stderr, "datasource %q uses secure JSON fields and requires manual changes. See https://grafana.github.io/grafana-operator/docs/datasources/\n", datasource.Name)
+			_, _ = fmt.Fprintf(os.Stderr, "datasource %q uses secure JSON fields and requires manual changes. See https://grafana.github.io/grafana-operator/docs/examples/datasource/\n", datasource.Name)
 		}
-		body, err := yaml.Marshal(d.operatorDatasource(datasource, cli))
+		ds, err := d.operatorDatasource(datasource, cli)
+		if err != nil {
+			return fmt.Errorf("failed to get operator datasource: %w", err)
+		}
+		body, err := yaml.Marshal(ds)
 		if err != nil {
 			return fmt.Errorf("failed to marshal operator datasource: %w", err)
 		}
@@ -55,10 +59,14 @@ type datasourceManifest struct {
 	Spec              v1beta1.GrafanaDatasourceSpec `json:"spec"`
 }
 
-func (d DataSourcesCmd) operatorDatasource(datasource *models.DataSource, cli *CLI) datasourceManifest {
+func (d DataSourcesCmd) operatorDatasource(datasource *models.DataSource, cli *CLI) (datasourceManifest, error) {
 	var jsonData json.RawMessage
 	if datasource.JSONData != nil {
 		jsonData, _ = json.Marshal(datasource.JSONData)
+	}
+	selector, err := cli.Grafana.instanceSelector()
+	if err != nil {
+		return datasourceManifest{}, fmt.Errorf("failed to get instance selector: %w", err)
 	}
 	return datasourceManifest{
 		APIVersion: v1beta1.SchemeGroupVersion.String(),
@@ -69,7 +77,7 @@ func (d DataSourcesCmd) operatorDatasource(datasource *models.DataSource, cli *C
 			GrafanaCommonSpec: v1beta1.GrafanaCommonSpec{
 				ResyncPeriod:              metav1.Duration{Duration: 10 * time.Minute},
 				AllowCrossNamespaceImport: true,
-				InstanceSelector:          cli.Grafana.instanceSelector(),
+				InstanceSelector:          selector,
 			},
 			// isn't there a way to get *GrafanaDatasourceInternal directly?
 			Datasource: &v1beta1.GrafanaDatasourceInternal{
@@ -88,7 +96,7 @@ func (d DataSourcesCmd) operatorDatasource(datasource *models.DataSource, cli *C
 				SecureJSONData: nil, // unavailable from the grafana API.
 			},
 		},
-	}
+	}, nil
 }
 
 // grafanaDataSources returns all datasources that match the names in args.

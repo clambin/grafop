@@ -22,12 +22,11 @@ import (
 // DashboardsCmd is a Kong command that exports Grafana dashboards.
 type DashboardsCmd struct {
 	Tags    []string `name:"tags" help:"Dashboards tags to add"`
-	Args    []string `arg:"" help:"Additional arguments"`
+	Args    []string `arg:"" optional:"" help:"Additional arguments"`
 	Folders bool     `name:"folders" help:"Export folders"`
 }
 
 func (d DashboardsCmd) Run(cli *CLI) error {
-	fmt.Println(cli)
 	client, err := cli.Grafana.client()
 	if err == nil {
 		err = d.export(os.Stdout, client, cli)
@@ -82,6 +81,11 @@ func (d DashboardsCmd) operatorDashboard(cli *CLI, entry exportedDashboard) (das
 		return dashboardManifest{}, fmt.Errorf("json: %w", err)
 	}
 
+	selector, err := cli.Grafana.instanceSelector()
+	if err != nil {
+		return dashboardManifest{}, fmt.Errorf("failed to get instance selector: %w", err)
+	}
+
 	return dashboardManifest{
 		APIVersion: v1beta1.SchemeGroupVersion.String(),
 		Kind:       "GrafanaDashboard",
@@ -91,7 +95,7 @@ func (d DashboardsCmd) operatorDashboard(cli *CLI, entry exportedDashboard) (das
 			GrafanaCommonSpec: v1beta1.GrafanaCommonSpec{
 				ResyncPeriod:              metav1.Duration{Duration: 10 * time.Minute},
 				AllowCrossNamespaceImport: true,
-				InstanceSelector:          cli.Grafana.instanceSelector(),
+				InstanceSelector:          selector,
 			},
 			GrafanaContentSpec: v1beta1.GrafanaContentSpec{
 				JSON: encodedDashboard.String(),
