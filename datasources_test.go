@@ -5,37 +5,47 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
-	"github.com/gosimple/slug"
 	"github.com/grafana/grafana-openapi-client-go/client/datasources"
 	"github.com/grafana/grafana-openapi-client-go/models"
-	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestExportDataSources(t *testing.T) {
-	v := viper.New()
-	v.Set("namespace", "monitoring")
-	v.Set("grafana.operator.label.value", "local-grafana")
-	v.Set("grafana.url", "http://grafana")
-	v.Set("grafana.operator.label.name", "dashboards")
-	v.Set("grafana.operator.label.value", "local-grafana")
-	cfg := configurationFromViper(v)
 	client := grafanaClient{
 		Datasources: fakeDataSourceFetcher{
 			dataSources: map[string]*models.DataSource{
-				"prometheus": {ID: 0, Name: "prometheus", Type: "prometheus", URL: "http://prometheus"},
+				"prometheus": {
+					ID:               0,
+					Name:             "prometheus",
+					Type:             "prometheus",
+					URL:              "http://prometheus",
+					JSONData:         map[string]any{"foo": "bar"},
+					SecureJSONFields: map[string]bool{"secure": true},
+				},
 			},
+		},
+	}
+	cli := CLI{
+		Namespace: "monitoring",
+		Grafana: grafanaConfig{Operator: grafanaOperator{Label: grafanaOperatorLabel{
+			Name:  "dashboards",
+			Value: "local-grafana",
+		}}},
+		DataSources: DataSourcesCmd{
+			Args: []string{"prometheus"},
 		},
 	}
 
 	var buf bytes.Buffer
-	require.NoError(t, exportDatasources(&buf, &client, cfg, []string{"prometheus"}))
+	require.NoError(t, cli.DataSources.export(&buf, &client, &cli))
 
-	gp := filepath.Join("testdata", slug.Make(t.Name())+".yaml")
+	gp := filepath.Join("testdata", strings.ToLower(t.Name())+".yaml")
 	if *update {
+		require.NoError(t, os.MkdirAll(filepath.Dir(gp), 0755))
 		require.NoError(t, os.WriteFile(gp, buf.Bytes(), 0644))
 	}
 	golden, err := os.ReadFile(gp)

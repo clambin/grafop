@@ -6,14 +6,12 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
-	"codeberg.org/clambin/go-common/set"
-	"github.com/gosimple/slug"
 	"github.com/grafana/grafana-openapi-client-go/client/dashboards"
 	"github.com/grafana/grafana-openapi-client-go/client/search"
 	"github.com/grafana/grafana-openapi-client-go/models"
-	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,80 +21,66 @@ var update = flag.Bool("update", false, "update golden files")
 func TestExportDashboards(t *testing.T) {
 	tests := []struct {
 		name    string
-		config  func() *viper.Viper
-		args    []string
+		cmd     DashboardsCmd
+		cli     CLI
 		limit   int64
 		wantErr assert.ErrorAssertionFunc
 	}{
 		{
 			name: "unfiltered",
-			config: func() *viper.Viper {
-				v := viper.New()
-				v.Set("grafana.url", "http://grafana")
-				return v
-			},
-			wantErr: assert.NoError,
+			cli: CLI{Grafana: grafanaConfig{
+				URL:      "http://grafana",
+				Operator: grafanaOperator{Label: grafanaOperatorLabel{Name: "dashboards", Value: "grafana"}},
+			}},
 		},
 		{
 			name: "with namespace",
-			config: func() *viper.Viper {
-				v := viper.New()
-				v.Set("grafana.url", "http://grafana")
-				v.Set("namespace", "foo")
-				return v
+			cli: CLI{
+				Namespace: "foo",
+				Grafana: grafanaConfig{
+					URL:      "http://grafana",
+					Operator: grafanaOperator{Label: grafanaOperatorLabel{Name: "dashboards", Value: "grafana"}},
+				},
 			},
 			wantErr: assert.NoError,
 		},
 		{
 			name: "tagged",
-			config: func() *viper.Viper {
-				v := viper.New()
-				v.Set("grafana.url", "http://grafana")
-				v.Set("tags", "grafop")
-				return v
+			cmd: DashboardsCmd{
+				Tags: []string{"grafop"},
+			},
+			cli: CLI{
+				Grafana: grafanaConfig{
+					URL:      "http://grafana",
+					Operator: grafanaOperator{Label: grafanaOperatorLabel{Name: "dashboards", Value: "grafana"}},
+				},
 			},
 			wantErr: assert.NoError,
 		},
 		{
 			name: "filtered by name",
-			config: func() *viper.Viper {
-				v := viper.New()
-				v.Set("grafana.url", "http://grafana")
-				return v
+			cmd: DashboardsCmd{
+				Args: []string{"db 1"},
 			},
-			args:    []string{"db 1"},
+			cli: CLI{
+				Grafana: grafanaConfig{
+					URL:      "http://grafana",
+					Operator: grafanaOperator{Label: grafanaOperatorLabel{Name: "dashboards", Value: "grafana"}},
+				},
+			},
 			wantErr: assert.NoError,
 		},
 		{
 			name: "filtered by folder",
-			config: func() *viper.Viper {
-				v := viper.New()
-				v.Set("grafana.url", "http://grafana")
-				v.Set("folders", true)
-				return v
+			cmd: DashboardsCmd{
+				Folders: true,
+				Args:    []string{"folder 1"},
 			},
-			args:    []string{"folder 1"},
-			wantErr: assert.NoError,
-		},
-		{
-			name: "override",
-			config: func() *viper.Viper {
-				v := viper.New()
-				v.Set("grafana.url", "http://grafana")
-				v.Set("namespace", "application")
-				v.Set("grafana.operator.label.name", "dashboards")
-				v.Set("grafana.operator.label.value", "local-grafana")
-				v.Set("folders", "folder 1")
-				return v
-			},
-			wantErr: assert.NoError,
-		},
-		{
-			name: "paged",
-			config: func() *viper.Viper {
-				v := viper.New()
-				v.Set("grafana.url", "http://grafana")
-				return v
+			cli: CLI{
+				Grafana: grafanaConfig{
+					URL:      "http://grafana",
+					Operator: grafanaOperator{Label: grafanaOperatorLabel{Name: "dashboards", Value: "grafana"}},
+				},
 			},
 			wantErr: assert.NoError,
 		},
@@ -104,7 +88,6 @@ func TestExportDashboards(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := configurationFromViper(tt.config())
 			client := grafanaClient{
 				Search: fakeSearcher{
 					limit: tt.limit,
@@ -120,10 +103,11 @@ func TestExportDashboards(t *testing.T) {
 			}
 
 			var buf bytes.Buffer
-			require.NoError(t, exportDashboards(&buf, &client, cfg, set.New(tt.args...)))
+			require.NoError(t, tt.cmd.export(&buf, &client, &tt.cli))
 
-			gp := filepath.Join("testdata", slug.Make(t.Name())+".yaml")
+			gp := filepath.Join("testdata", strings.ToLower(t.Name())+".yaml")
 			if *update {
+				require.NoError(t, os.MkdirAll(filepath.Dir(gp), 0755))
 				require.NoError(t, os.WriteFile(gp, buf.Bytes(), 0644))
 			}
 			golden, err := os.ReadFile(gp)
