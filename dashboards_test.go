@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"errors"
 	"flag"
 	"os"
@@ -32,6 +33,14 @@ func TestExportDashboards(t *testing.T) {
 				URL:      "http://grafana",
 				Operator: grafanaOperator{Label: grafanaOperatorLabel{Name: "dashboards", Value: "grafana"}},
 			}},
+		},
+		{
+			name: "paged",
+			cli: CLI{Grafana: grafanaConfig{
+				URL:      "http://grafana",
+				Operator: grafanaOperator{Label: grafanaOperatorLabel{Name: "dashboards", Value: "grafana"}},
+			}},
+			limit: 1,
 		},
 		{
 			name: "with namespace",
@@ -114,6 +123,7 @@ func TestExportDashboards(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, string(golden), buf.String())
 		})
+
 	}
 }
 
@@ -191,19 +201,18 @@ func (f fakeSearcher) Search(params *search.SearchParams, _ ...search.ClientOpti
 	var page int64
 	if params.Page != nil {
 		page = *params.Page
+	} else {
+		page = 1
 	}
-	limit := f.limit
-	if limit == 0 {
-		limit = int64(1000)
-	}
+	limit := cmp.Or(f.limit, 1000)
 	if params.Limit != nil {
 		limit = *params.Limit
 	}
 	start := int(page-1) * int(limit)
-	if start > len(f.hitList) {
+	if start >= len(f.hitList) {
 		return result, nil
 	}
-	end := max(start+int(page), len(f.hitList))
+	end := min(start+int(page), len(f.hitList))
 	result.Payload = f.hitList[start:end]
 	return result, f.err
 }

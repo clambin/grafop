@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"iter"
 	"os"
 	"time"
 
@@ -29,10 +28,20 @@ func (d DataSourcesCmd) Run(cli *CLI) error {
 }
 
 func (d DataSourcesCmd) export(w io.Writer, client *grafanaClient, cli *CLI) error {
-	for datasource, err := range grafanaDataSources(client, d.Args) {
-		if err != nil {
-			return fmt.Errorf("failed to get datasources: %w", err)
+	iterator := NewIteratorWithError[*models.DataSource](func(yield func(*models.DataSource) bool, iterator *IteratorWithError[*models.DataSource]) {
+		for _, name := range d.Args {
+			ds, err := client.Datasources.GetDataSourceByName(name)
+			if err != nil {
+				iterator.SetError(fmt.Errorf("error getting datasource %q: %w", name, err))
+				return
+			}
+			if !yield(ds.GetPayload()) {
+				return
+			}
 		}
+	})
+
+	for datasource := range iterator.All() {
 		if len(datasource.SecureJSONFields) > 0 {
 			_, _ = fmt.Fprintf(os.Stderr, "datasource %q uses secure JSON fields and requires manual changes. See https://grafana.github.io/grafana-operator/docs/examples/datasource/\n", datasource.Name)
 		}
@@ -48,7 +57,7 @@ func (d DataSourcesCmd) export(w io.Writer, client *grafanaClient, cli *CLI) err
 		_, _ = w.Write(body)
 
 	}
-	return nil
+	return iterator.Error()
 }
 
 // datasourceManifest is a stripped-down version of Grafana Operator Datasource custom resource.
@@ -97,20 +106,4 @@ func (d DataSourcesCmd) operatorDatasource(datasource *models.DataSource, cli *C
 			},
 		},
 	}, nil
-}
-
-// grafanaDataSources returns all datasources that match the names in args.
-func grafanaDataSources(c *grafanaClient, args []string) iter.Seq2[*models.DataSource, error] {
-	return func(yield func(*models.DataSource, error) bool) {
-		for _, name := range args {
-			ds, err := c.Datasources.GetDataSourceByName(name)
-			if err != nil {
-				yield(nil, fmt.Errorf("error getting datasource %q: %w", name, err))
-				continue
-			}
-			if !yield(ds.GetPayload(), nil) {
-				return
-			}
-		}
-	}
 }

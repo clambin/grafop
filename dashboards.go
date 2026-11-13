@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"iter"
 	"os"
-	"sync/atomic"
 	"time"
 
 	"codeberg.org/clambin/go-common/set"
@@ -36,12 +34,49 @@ func (d DashboardsCmd) Run(cli *CLI) error {
 
 // export iterates over Grafana dashboards matching the provided names and exports them to YAML.
 func (d DashboardsCmd) export(w io.Writer, client *grafanaClient, cli *CLI) error {
-	// iterate through all matching dashboards
-	i := dashboardIterator{
-		folders: d.Folders,
+	// set up matcher criteria
+	m := matcher{
 		args:    set.New(d.Args...),
-		client:  client,
+		folders: d.Folders,
 	}
+
+	// iterate through all matching dashboards
+	i := NewIteratorWithError[exportedDashboard](func(yield func(exportedDashboard) bool, iterator *IteratorWithError[exportedDashboard]) {
+		params := search.SearchParams{Type: new("dash-db")}
+		var page int64
+		// searching for dashboards returns pages of results
+		// Grafana starts page numbering at 1
+		for page = 1; ; page++ {
+			// get the next page of results
+			params.Page = &page
+			ok, err := client.Search.Search(&params)
+			if err != nil {
+				iterator.SetError(fmt.Errorf("error getting dashboards: %w", err))
+				return
+			}
+			// get all dashboards
+			hits := ok.GetPayload()
+			if len(hits) == 0 {
+				return
+			}
+			for _, entry := range hits {
+				// skip dashboards that don't match the filter
+				if !m.matches(entry) {
+					continue
+				}
+				// search doesn't return the actual dashboard, so we need to get it using the entry's UID
+				db, err := client.Dashboards.GetDashboardByUID(entry.UID)
+				if err != nil {
+					iterator.SetError(fmt.Errorf("error getting dashboard %q: %w", entry.Title, err))
+					return
+				}
+				// yield the dashboard
+				if !yield(exportedDashboard{Hit: entry, Dashboard: db.GetPayload()}) {
+					return
+				}
+			}
+		}
+	})
 	for dashboard := range i.All() {
 		// create an operator dashboard manifest
 		db, err := d.operatorDashboard(cli, dashboard)
@@ -57,7 +92,7 @@ func (d DashboardsCmd) export(w io.Writer, client *grafanaClient, cli *CLI) erro
 		_, _ = w.Write([]byte("---\n"))
 		_, _ = w.Write(body)
 	}
-	return i.Err()
+	return i.Error()
 }
 
 // dashboardManifest is a stripped-down version of Grafana Operator Dashboard custom resource.
@@ -137,68 +172,19 @@ type exportedDashboard struct {
 	Dashboard *models.DashboardFullWithMeta
 }
 
-// dashboardIterator is an iterator that returns all Grafana dashboards that match args.
-// If folders is false, it returns all dashboards whose title matches an element of args.
-// Otherwise, it returns all dashboards in folders that matches an element of args.
-type dashboardIterator struct {
+type matcher struct {
 	args    set.Set[string]
-	client  *grafanaClient
-	err     atomic.Value
 	folders bool
 }
 
-func (i *dashboardIterator) Err() error {
-	err, _ := i.err.Load().(error)
-	return err
-}
-
-func (i *dashboardIterator) All() iter.Seq[exportedDashboard] {
-	return func(yield func(exportedDashboard) bool) {
-		params := search.SearchParams{Type: new("dash-db")}
-		var page int64
-		// searching for dashboards returns pages of results
-		// Grafana starts page numbering at 1
-		for page = 1; ; page++ {
-			// get the next page of results
-			params.Page = &page
-			ok, err := i.client.Search.Search(&params)
-			if err != nil {
-				i.err.Store(fmt.Errorf("error getting dashboards: %w", err))
-				return
-			}
-			// get all dashboards
-			hits := ok.GetPayload()
-			if len(hits) == 0 {
-				return
-			}
-			for _, entry := range hits {
-				// skip dashboards that don't match the filter
-				if !i.match(entry) {
-					continue
-				}
-				// search doesn't return the actual dashboard, so we need to get it using the entry's UID
-				db, err := i.client.Dashboards.GetDashboardByUID(entry.UID)
-				if err != nil {
-					i.err.Store(fmt.Errorf("error getting dashboard %q: %w", entry.Title, err))
-					return
-				}
-				// yield the dashboard
-				if !yield(exportedDashboard{Hit: entry, Dashboard: db.GetPayload()}) {
-					return
-				}
-			}
-		}
-	}
-}
-
-func (i *dashboardIterator) match(entry *models.Hit) bool {
+func (m matcher) matches(entry *models.Hit) bool {
 	switch {
-	case len(i.args) == 0:
+	case len(m.args) == 0:
 		return true
-	case i.folders:
-		return i.args.Contains(entry.FolderTitle)
-	case !i.folders:
-		return i.args.Contains(entry.Title)
+	case m.folders:
+		return m.args.Contains(entry.FolderTitle)
+	case !m.folders:
+		return m.args.Contains(entry.Title)
 	}
 	return false
 }

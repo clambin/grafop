@@ -16,21 +16,3 @@ spec:
       "tags": []
     }
   resyncPeriod: 10m0s
----
-apiVersion: grafana.integreatly.org/v1beta1
-kind: GrafanaDashboard
-metadata:
-  name: db-2
-spec:
-  allowCrossNamespaceImport: true
-  contentCacheDuration: 0s
-  folder: folder 2
-  instanceSelector:
-    matchLabels:
-      dashboards: grafana
-  json: |
-    {
-      "foo": "bar",
-      "tags": []
-    }
-  resyncPeriod: 10m0s
