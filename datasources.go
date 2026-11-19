@@ -84,7 +84,7 @@ func (d DataSourcesCmd) operatorDatasource(datasource *models.DataSource, cli *C
 		Namespace:  cli.Namespace,
 		Spec: v1beta1.GrafanaDatasourceSpec{
 			GrafanaCommonSpec: v1beta1.GrafanaCommonSpec{
-				ResyncPeriod:              metav1.Duration{Duration: 10 * time.Minute},
+				ResyncPeriod:              &metav1.Duration{Duration: 10 * time.Minute},
 				AllowCrossNamespaceImport: true,
 				InstanceSelector:          selector,
 			},
