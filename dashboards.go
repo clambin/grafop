@@ -128,7 +128,7 @@ func (d DashboardsCmd) operatorDashboard(cli *CLI, entry exportedDashboard) (das
 		Namespace:  cli.Namespace,
 		Spec: v1beta1.GrafanaDashboardSpec{
 			GrafanaCommonSpec: v1beta1.GrafanaCommonSpec{
-				ResyncPeriod:              metav1.Duration{Duration: 10 * time.Minute},
+				ResyncPeriod:              &metav1.Duration{Duration: 10 * time.Minute},
 				AllowCrossNamespaceImport: true,
 				InstanceSelector:          selector,
 			},
